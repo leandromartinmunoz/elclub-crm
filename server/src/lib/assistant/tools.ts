@@ -16,23 +16,25 @@ export const TOOLS: Tool[] = [
   {
     name: "resumen_socios",
     path: "/api/ia/resumen",
-    description: "Totales actuales: socios activos, por sede, por medio de pago y por plan. Usala primero para preguntas de cantidades generales y para conocer los nombres exactos de sedes, planes y medios de pago.",
+    description: "Totales de socios ACTIVOS: por sede, por medio de pago de su último cobro, por plan vigente y cuántos tienen deuda. Usala primero para cantidades generales y para conocer los nombres exactos de sedes, planes y medios de pago.",
     input_schema: { type: "object", properties: { sede } },
   },
   {
     name: "buscar_socios",
     path: "/api/ia/socios",
-    description: "Cuenta y lista socios con filtros combinables. Devuelve { total, socios: [...] } (la lista se corta en 'limite', el total es siempre el real). Sirve para: medio de pago (ej. débito automático), antigüedad (filtrar por fecha de alta), inactivos (sin asistir X días), con deuda, por plan o sede.",
+    description: "Cuenta y lista socios con filtros combinables. Devuelve { total, mostrados, socios } (total es el real aunque la lista se corte en 'limite'). Cada socio trae teléfono, plan vigente, vencimiento, fecha de alta, última asistencia, asistencias de los últimos 30 días, medio y fecha de su último cobro, y deuda. Sirve para: medio de pago (ej. 'débito'), antigüedad (fecha de alta), inactivos (sin asistir X días), con deuda, por plan, sede o vencimiento.",
     input_schema: {
       type: "object",
       properties: {
         sede,
-        estado: { type: "string", enum: ["activo", "vencido", "baja", "todos"], description: "Por defecto: activo." },
-        medio_pago: { type: "string", description: "Tal como lo nombra la app (ver resumen_socios), ej. debito_automatico." },
-        plan: { type: "string", description: "Nombre o parte del nombre del plan." },
+        estado: { type: "string", enum: ["activo", "inactivo", "todos"], description: "Por defecto: activo (marca de EVO)." },
+        medio_pago: { type: "string", description: "Texto contenido en el medio de pago del ÚLTIMO cobro, ej. 'débito'. Ver nombres en resumen_socios." },
+        plan: { type: "string", description: "Texto contenido en el plan vigente." },
         alta_desde: fecha("Fecha de alta desde"),
         alta_hasta: fecha("Fecha de alta hasta"),
-        sin_asistir_dias: { type: "integer", minimum: 1, description: "Solo los que no vienen hace al menos estos días." },
+        vence_desde: fecha("Vencimiento de la membresía desde"),
+        vence_hasta: fecha("Vencimiento de la membresía hasta"),
+        sin_asistir_dias: { type: "integer", minimum: 1, description: "Solo los que no vienen hace al menos estos días (o nunca registraron asistencia)." },
         con_deuda: { type: "boolean" },
         limite: { type: "integer", minimum: 1, maximum: 500, description: "Cuántos listar (por defecto 50). Para solo contar, usar 1." },
       },
@@ -41,17 +43,20 @@ export const TOOLS: Tool[] = [
   {
     name: "socios_sin_renovar",
     path: "/api/ia/sin-renovar",
-    description: "Socios cuyo período venció en el mes indicado y no pagaron uno nuevo. Devuelve { total, socios: [...] } con último pago y fecha de vencimiento.",
+    description: "Socios cuya membresía venció en el mes indicado y no empezaron otra en la misma sede dentro del plazo de renovación (45 días). Separa 'baja' (ya pasó el plazo) de 'pendiente' (todavía puede renovar). Devuelve { total, bajas, pendientes, socios }.",
     input_schema: {
       type: "object",
-      properties: { mes: { type: "string", description: "Mes (AAAA-MM)." }, sede },
+      properties: {
+        mes: { type: "string", description: "Mes (AAAA-MM)." }, sede,
+        plazo_dias: { type: "integer", minimum: 1, maximum: 365, description: "Plazo de renovación. Por defecto 45, como los reportes." },
+      },
       required: ["mes"],
     },
   },
   {
     name: "vencimientos",
     path: "/api/ia/vencimientos",
-    description: "Socios a los que se les vence la cuota entre dos fechas. Devuelve { total, socios: [...] }.",
+    description: "Membresías que vencen entre dos fechas, con teléfono y si el socio ya renovó (ya_renovo). Devuelve { total, socios }.",
     input_schema: {
       type: "object",
       properties: { desde: fecha("Desde"), hasta: fecha("Hasta"), sede },
@@ -61,20 +66,20 @@ export const TOOLS: Tool[] = [
   {
     name: "altas_bajas",
     path: "/api/ia/altas-bajas",
-    description: "Altas y bajas de socios entre dos fechas, con el detalle de cada una.",
+    description: "Altas (inscripciones, con consultor), bajas (no renovaron, con la regla de 45 días) y cancelaciones (con motivo) entre dos fechas.",
     input_schema: {
       type: "object",
-      properties: { desde: fecha("Desde"), hasta: fecha("Hasta"), sede },
+      properties: { desde: fecha("Desde"), hasta: fecha("Hasta"), sede, plazo_dias: { type: "integer", minimum: 1, maximum: 365 } },
       required: ["desde", "hasta"],
     },
   },
   {
     name: "ficha_socio",
     path: "/api/ia/socio",
-    description: "Ficha de un socio: datos, plan, pagos recientes y asistencias. Busca por nombre, DNI o teléfono; puede devolver varias coincidencias.",
+    description: "Ficha de hasta 5 socios que coinciden: datos, plan, vencimiento, asistencia, deuda, últimas 6 membresías y últimos 6 cobros. Busca por nombre, DNI o teléfono.",
     input_schema: {
       type: "object",
-      properties: { q: { type: "string", description: "Nombre, DNI o teléfono." } },
+      properties: { q: { type: "string", description: "Nombre, DNI o teléfono (mínimo 3 caracteres)." } },
       required: ["q"],
     },
   },

@@ -35,6 +35,7 @@ Le respondés a ${user.name} (área: ${roleLabel[user.role]}). Hoy es ${today} (
 
 Cómo trabajás:
 - Respondé SOLO con datos que obtengas de las consultas disponibles. Nunca inventes números ni nombres. Si una consulta falla o no existe, decilo claramente.
+- Los datos son copias de EVO que se actualizan de noche, no en vivo. Cada resultado trae 'actualizado' y 'notas': respetá esas notas (ej. medio de pago = el del último cobro; no figurar en deudores no es deuda cero; 'pendiente' no es baja).
 - Primero el dato pedido (el total), después el detalle. Si la lista es larga, mostrá una tabla con lo esencial y aclarás cuántos hay en total.
 - Antigüedad: se calcula desde la fecha de alta. "Cumplen 3 meses en diciembre" = fecha de alta en septiembre.
 - Si no sabés el nombre exacto de una sede, plan o medio de pago, consultá primero resumen_socios.
