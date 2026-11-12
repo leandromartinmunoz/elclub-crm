@@ -21,6 +21,13 @@ export const claudeDeps = {
 
 export const assistantConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 const model = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
+/**
+ * Modelo rápido y barato para preguntas simples (las que resuelven las consultas fijas).
+ * Si necesita la consulta libre (cruzar datos), la pregunta pasa entera al modelo principal.
+ * ANTHROPIC_FAST_MODEL=off lo desactiva.
+ */
+const fastModel = () => { const m = process.env.ANTHROPIC_FAST_MODEL ?? "claude-haiku-5-5"; return m && m !== "off" ? m : null; };
+const FREE_QUERY_TOOLS = new Set(["consulta_sql", "diccionario_datos"]);
 const MAX_STEPS = 12;
 
 const roleLabel: Record<SessionUser["role"], string> = { admin: "administración", vendedor: "ventas", recepcion: "recepción", asistente: "consultas generales" };
@@ -48,7 +55,9 @@ Cómo trabajás:
 - Español rioplatense, breve y directo. Formato: markdown simple (negritas, listas y tablas).`;
 }
 
-export type Usage = { input: number; cacheWrite: number; cacheRead: number; output: number; steps: number };
+export type ModelUsage = { input: number; cacheWrite: number; cacheRead: number; output: number; steps: number };
+/** Tokens por modelo usado (para calcular el costo real de cada pregunta). */
+export type Usage = Record<string, ModelUsage>;
 
 /** Marca el último bloque de un mensaje para que la API lo guarde en caché (lo ya leído no se vuelve a cobrar entero). */
 function withCacheMark(message: any) {
@@ -79,12 +88,7 @@ async function callClaude(body: unknown) {
 /** Responde una pregunta usando el historial del chat. Devuelve el texto y las consultas hechas. */
 export async function answer(user: SessionUser, history: HistoryItem[], question: string) {
   if (!assistantConfigured()) throw new UserFacingError("Falta configurar ANTHROPIC_API_KEY en el servidor.", 503);
-  const messages: any[] = [
-    ...history.map(h => ({ role: h.role, content: h.text })),
-    { role: "user", content: question },
-  ];
-  const tools: ToolCall[] = [];
-  const usage: Usage = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, steps: 0 };
+  const usage: Usage = {};
 
   // Instrucciones + diccionario de datos: iguales en cada paso, van en caché.
   const admin = user.role === "admin";
@@ -96,29 +100,47 @@ export async function answer(user: SessionUser, history: HistoryItem[], question
   const available = dictionary ? toolDefinitions.filter(t => t.name !== "diccionario_datos") : toolDefinitions;
   const cachedTools = available.map((t, i) => i === available.length - 1 ? { ...t, cache_control: { type: "ephemeral" } } : t);
 
-  for (let step = 0; step < MAX_STEPS; step++) {
-    const result = await callClaude({
-      model: model(), max_tokens: 4096, system, tools: cachedTools,
-      messages: messages.map((m, i) => i === messages.length - 1 ? withCacheMark(m) : m),
-    });
-    usage.steps++;
-    usage.input += result.usage?.input_tokens ?? 0;
-    usage.cacheWrite += result.usage?.cache_creation_input_tokens ?? 0;
-    usage.cacheRead += result.usage?.cache_read_input_tokens ?? 0;
-    usage.output += result.usage?.output_tokens ?? 0;
-    messages.push({ role: "assistant", content: result.content });
-    const uses = result.content.filter(block => block.type === "tool_use");
-    if (result.stop_reason !== "tool_use" || !uses.length) {
-      const text = result.content.filter(block => block.type === "text").map(block => block.text).join("\n").trim();
-      return { text: text || "No tengo una respuesta para eso.", tools, usage };
+  /** Corre la conversación con un modelo. escalate = el modelo rápido pidió la consulta libre: hay que pasarla al principal. */
+  async function run(modelName: string, isFast: boolean) {
+    const messages: any[] = [
+      ...history.map(h => ({ role: h.role, content: h.text })),
+      { role: "user", content: question },
+    ];
+    const tools: ToolCall[] = [];
+    const u = usage[modelName] ??= { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, steps: 0 };
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const result = await callClaude({
+        model: modelName, max_tokens: 4096, system, tools: cachedTools,
+        messages: messages.map((m, i) => i === messages.length - 1 ? withCacheMark(m) : m),
+      });
+      u.steps++;
+      u.input += result.usage?.input_tokens ?? 0;
+      u.cacheWrite += result.usage?.cache_creation_input_tokens ?? 0;
+      u.cacheRead += result.usage?.cache_read_input_tokens ?? 0;
+      u.output += result.usage?.output_tokens ?? 0;
+      messages.push({ role: "assistant", content: result.content });
+      const uses = result.content.filter(block => block.type === "tool_use");
+      if (result.stop_reason !== "tool_use" || !uses.length) {
+        const text = result.content.filter(block => block.type === "text").map(block => block.text).join("\n").trim();
+        return { text: text || "No tengo una respuesta para eso.", tools };
+      }
+      if (isFast && uses.some(use => FREE_QUERY_TOOLS.has(use.name))) return { escalate: true as const };
+      const results = [];
+      for (const use of uses) {
+        const outcome = await runTool(use.name, use.input, admin);
+        tools.push({ name: use.name, input: use.input, ...(outcome.isError ? { error: true } : {}) });
+        results.push({ type: "tool_result", tool_use_id: use.id, content: outcome.content, is_error: outcome.isError });
+      }
+      messages.push({ role: "user", content: results });
     }
-    const results = [];
-    for (const use of uses) {
-      const outcome = await runTool(use.name, use.input, admin);
-      tools.push({ name: use.name, input: use.input, ...(outcome.isError ? { error: true } : {}) });
-      results.push({ type: "tool_result", tool_use_id: use.id, content: outcome.content, is_error: outcome.isError });
-    }
-    messages.push({ role: "user", content: results });
+    return { text: "La consulta necesitó demasiados pasos. Probá dividirla en preguntas más simples.", tools };
   }
-  return { text: "La consulta necesitó demasiados pasos. Probá dividirla en preguntas más simples.", tools, usage };
+
+  const fast = fastModel();
+  if (fast && fast !== model()) {
+    const quick = await run(fast, true);
+    if (!("escalate" in quick)) return { ...quick, usage };
+  }
+  const full = await run(model(), false);
+  return { ...(full as { text: string; tools: ToolCall[] }), usage };
 }

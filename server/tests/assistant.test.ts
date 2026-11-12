@@ -212,6 +212,29 @@ describe("costo", () => {
     expect(claudeCalls[0].tools.map((t: any) => t.name)).not.toContain("diccionario_datos");
     expect(appCalls.filter(c => c.url.includes("diccionario"))).toHaveLength(1); // guardado 1 hora
     const log = (await admin.call("GET", "/api/assistant/log")).body;
-    expect(log[0].usage).toEqual({ input: 10, cacheWrite: 0, cacheRead: 900, output: 5, steps: 1 });
+    expect(log[0].usage).toEqual({ "claude-haiku-5-5": { input: 10, cacheWrite: 0, cacheRead: 900, output: 5, steps: 1 } });
+  });
+
+  it("las preguntas simples las responde Haiku; si necesita la consulta libre pasa entera a Sonnet", async () => {
+    toolDeps.mainAppRequest = async url => url.includes("diccionario") ? json({ diccionario: "- socios(...)" })
+      : url.includes("consulta") ? json({ columnas: ["n"], filas: [[7]], recortado: false }) : json({ total: 42 });
+    const admin = await Client.login("leandro", "clave-segura-123");
+    fakeClaude("resumen_socios", {});
+    const simple = await admin.call("POST", "/api/assistant/ask", { question: "¿Cuántos socios activos hay?" });
+    expect(claudeCalls.map(c => c.model)).toEqual(["claude-haiku-5-5", "claude-haiku-5-5"]);
+    expect(simple.body.message.text).toContain('"total":42');
+    claudeCalls = [];
+    fakeClaude("consulta_sql", { sql: "SELECT count(*) n FROM socios" });
+    const complex = await admin.call("POST", "/api/assistant/ask", { question: "¿Cuántos socios por edad y plan?" });
+    expect(claudeCalls.map(c => c.model)).toEqual(["claude-haiku-5-5", "claude-sonnet-5-5", "claude-sonnet-5-5"]);
+    expect(complex.body.message.text).toContain('"filas":[[7]]');
+    expect(complex.body.message.tools).toEqual([{ name: "consulta_sql", input: { sql: "SELECT count(*) n FROM socios" } }]);
+    claudeCalls = [];
+    process.env.ANTHROPIC_FAST_MODEL = "off";
+    try {
+      fakeClaude("resumen_socios", {});
+      await admin.call("POST", "/api/assistant/ask", { question: "Resumen" });
+      expect(claudeCalls.map(c => c.model)).toEqual(["claude-sonnet-5-5", "claude-sonnet-5-5"]);
+    } finally { delete process.env.ANTHROPIC_FAST_MODEL; }
   });
 });
