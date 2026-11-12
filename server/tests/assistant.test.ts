@@ -163,7 +163,7 @@ describe("consulta libre", () => {
     expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8", alcance: "admin" }), auth: "Bearer token-app" });
   });
 
-  it("solo los administradores acceden a los datos del personal (Claude no lo puede forzar)", async () => {
+  it("solo administradores y "Solo asistente" acceden a los datos del personal (Claude no lo puede forzar)", async () => {
     const bodies: any[] = [], dics: string[] = [];
     toolDeps.mainAppRequest = async (url, init) => {
       if (url.includes("diccionario")) { dics.push(url); return json({ diccionario: url.includes("alcance=admin") ? "- asistencia_personal(...)" : "- socios(...)" }); }
@@ -180,6 +180,10 @@ describe("consulta libre", () => {
     expect(bodies.at(-1)).toEqual({ sql: "SELECT count(*) n FROM asistencia_personal", alcance: "admin" });
     expect(claudeCalls.at(-1).system[0].text).toContain("asistencia_personal(");
     expect(dics).toHaveLength(2); // uno por alcance
+    await admin.call("POST", "/api/users", { username: "hermano2", name: "Hermano", role: "asistente", password: "clave-hermano-123" });
+    const bro = await Client.login("hermano2", "clave-hermano-123");
+    await bro.call("POST", "/api/assistant/ask", { question: "¿Quién llegó tarde?" });
+    expect(bodies.at(-1)).toEqual({ sql: "SELECT count(*) n FROM asistencia_personal", alcance: "admin" });
   });
 });
 
