@@ -145,3 +145,16 @@ describe("asistente", () => {
     expect((await admin.call("GET", `/api/assistant/chats/${body.chatId}`)).status).toBe(404);
   });
 });
+
+describe("consulta libre", () => {
+  it("manda la consulta SQL por POST con el token", async () => {
+    let seen: any = null;
+    toolDeps.mainAppRequest = async (url, init) => { seen = { url, method: init.method, body: init.body, auth: (init.headers as any).Authorization };
+      return json({ columnas: ["n"], filas: [[12]], recortado: false }); };
+    fakeClaude("consulta_sql", { sql: "SELECT count(*) n FROM socios WHERE edad < 8" });
+    const admin = await Client.login("leandro", "clave-segura-123");
+    const res = await admin.call("POST", "/api/assistant/ask", { question: "¿Cuántos socios tienen menos de 8 años?" });
+    expect(res.body.message.text).toContain('"filas":[[12]]');
+    expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8" }), auth: "Bearer token-app" });
+  });
+});

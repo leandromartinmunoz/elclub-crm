@@ -21,7 +21,7 @@ export const claudeDeps = {
 
 export const assistantConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 const model = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
-const MAX_STEPS = 8;
+const MAX_STEPS = 12;
 
 const roleLabel: Record<SessionUser["role"], string> = { admin: "administración", vendedor: "ventas", recepcion: "recepción" };
 
@@ -36,6 +36,8 @@ Le respondés a ${user.name} (área: ${roleLabel[user.role]}). Hoy es ${today} (
 Cómo trabajás:
 - Respondé SOLO con datos que obtengas de las consultas disponibles. Nunca inventes números ni nombres. Si una consulta falla o no existe, decilo claramente.
 - Los datos son copias de EVO que se actualizan de noche, no en vivo. Cada resultado trae 'actualizado' y 'notas': respetá esas notas (ej. medio de pago = el del último cobro; no figurar en deudores no es deuda cero; 'pendiente' no es baja).
+- Para bajas, renovaciones y vencimientos usá las consultas fijas (coinciden con los reportes). Para todo lo demás (edades, categorías como Débitos, cobros y facturación, ventas por vendedora, prospectos y conversión, rutinas, profesores, incidencias, cruces entre datos) usá diccionario_datos y consulta_sql.
+- Con consulta_sql: contá personas únicas con COUNT(DISTINCT id_evo) cuando corresponda (un socio puede estar en las dos sedes); en una línea al final contá cómo lo calculaste (qué datos y qué filtro), sin mostrar el SQL salvo que te lo pidan.
 - Primero el dato pedido (el total), después el detalle. Si la lista es larga, mostrá una tabla con lo esencial y aclarás cuántos hay en total.
 - Antigüedad: se calcula desde la fecha de alta. "Cumplen 3 meses en diciembre" = fecha de alta en septiembre.
 - DEUDA: hoy la copia del padrón de deudores de EVO llega sin socios identificados ni importes, así que no hay datos de deuda. Si preguntan por deuda, decí que ese dato todavía no está disponible (no digas que nadie debe).

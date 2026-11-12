@@ -7,7 +7,7 @@ export const deps = {
 };
 
 type Schema = { type: "object"; properties: Record<string, unknown>; required?: string[] };
-export type Tool = { name: string; description: string; input_schema: Schema; path: string };
+export type Tool = { name: string; description: string; input_schema: Schema; path: string; method?: "GET" | "POST" };
 
 const sede = { type: "string", description: "Nombre de la sede. Omitir para todas." };
 const fecha = (d: string) => ({ type: "string", description: `${d} (AAAA-MM-DD)` });
@@ -89,6 +89,19 @@ export const TOOLS: Tool[] = [
       required: ["q"],
     },
   },
+  {
+    name: "diccionario_datos",
+    path: "/api/ia/diccionario",
+    description: "Describe las vistas de datos de la app para consulta_sql (socios, membresías con categoría y débito, cobros, ventas, prospectos, asistencias, consultores, rutinas, profesores, ingresos de recepción, incidencias) con sus columnas y reglas. Llamala antes de tu primera consulta_sql en la conversación.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "consulta_sql",
+    path: "/api/ia/consulta",
+    method: "POST",
+    description: "Ejecuta UNA consulta SQL de solo lectura (SELECT o WITH, dialecto PostgreSQL, sin ';' ni comentarios) sobre las vistas del diccionario. Devuelve { columnas, filas, recortado } con hasta 500 filas. Si da error, leé el mensaje y corregí la consulta. Preferí agregaciones (COUNT, SUM, GROUP BY) a traer filas sueltas.",
+    input_schema: { type: "object", properties: { sql: { type: "string" } }, required: ["sql"] },
+  },
 ];
 
 /** Lo que se le manda a Claude (sin la ruta interna). */
@@ -105,20 +118,25 @@ export async function runTool(name: string, input: unknown): Promise<ToolOutcome
   if (!base || !token) return { content: "La conexión con la app de El Club no está configurada.", isError: true };
 
   const url = new URL(tool.path, base);
+  const params: Record<string, unknown> = {};
   for (const [key, value] of Object.entries((input ?? {}) as Record<string, unknown>)) {
     if (!(key in tool.input_schema.properties)) continue; // solo parámetros conocidos
-    if (["string", "number", "boolean"].includes(typeof value)) url.searchParams.set(key, String(value));
+    if (["string", "number", "boolean"].includes(typeof value)) params[key] = value;
   }
+  const post = tool.method === "POST";
+  if (!post) for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
   try {
     const response = await deps.mainAppRequest(url.toString(), {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-      signal: AbortSignal.timeout(15_000),
+      method: post ? "POST" : "GET",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...(post ? { "Content-Type": "application/json" } : {}) },
+      ...(post ? { body: JSON.stringify(params) } : {}),
+      signal: AbortSignal.timeout(post ? 30_000 : 15_000),
     });
     // Por contrato, las consultas responden 200 aunque no haya resultados: un 404 es que falta crearla.
     if (response.status === 404)
       return { content: "Esta consulta todavía no está disponible en la app de El Club.", isError: true };
     const text = await response.text();
-    if (!response.ok) return { content: `La app de El Club respondió con error ${response.status}: ${text.slice(0, 300)}`, isError: true };
+    if (!response.ok) return { content: `La app de El Club respondió con error ${response.status}: ${text.slice(0, 600)}`, isError: true };
     return {
       content: text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}\n[resultado recortado: pedí menos filas con "limite"]` : text,
       isError: false,
