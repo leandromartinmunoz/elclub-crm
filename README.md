@@ -13,6 +13,9 @@ Bandeja de WhatsApp e Instagram y seguimiento comercial de El Club. Es una app p
   - Misma regla de 24 h. Mensajes de hasta 1000 caracteres. La ficha de socio no aplica (Instagram no da teléfono).
 - **Seguimiento**: asignar cada chat a un responsable, etiquetas (Prospecto, Socio, Deudor, No renovó, Consulta), cerrar o reabrir chats y notas internas que solo ve el equipo.
 - **Ficha del socio**: si se conecta con la app de El Club, muestra plan, sede, vencimiento y deuda del número que escribe.
+- **Asistente** (Administración y Ventas): preguntas en lenguaje natural sobre los socios ("¿cuántos pagan por débito?", "¿quiénes no renovaron el mes pasado?"). Usa Claude y consulta la app de El Club en **solo lectura**. Las tablas se descargan para Excel. Cada pregunta queda en el **Registro de consultas** (solo Administración). Límite: 60 preguntas por persona por hora.
+  - Necesita `ANTHROPIC_API_KEY`, `MAIN_APP_URL` y `MAIN_APP_TOKEN` en el `.env`.
+  - Consultas de la app de El Club que usa (ya implementadas en `exercise-plan-builder`): [docs/asistente-api-replit.md](docs/asistente-api-replit.md).
 
 ## Estructura
 
