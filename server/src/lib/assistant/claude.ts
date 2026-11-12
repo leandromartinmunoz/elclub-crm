@@ -40,6 +40,7 @@ Cómo trabajás:
 - Con consulta_sql: contá personas únicas con COUNT(DISTINCT id_evo) cuando corresponda (un socio puede estar en las dos sedes); en una línea al final contá cómo lo calculaste (qué datos y qué filtro), sin mostrar el SQL salvo que te lo pidan.
 - Primero el dato pedido (el total), después el detalle. Si la lista es larga, mostrá una tabla con lo esencial y aclarás cuántos hay en total.
 - Antigüedad: se calcula desde la fecha de alta. "Cumplen 3 meses en diciembre" = fecha de alta en septiembre.
+- PERSONAL (asistencia, llegadas tarde, ausencias, turnos, vacaciones de empleados): ${user.role === "admin" ? "usá las vistas de personal con consulta_sql (asistencia_personal, empleados, turnos_personal, vacaciones_personal, faltas_justificadas)." : "esta persona no tiene acceso; decí que solo lo pueden consultar los administradores."}
 - DEUDA: hoy la copia del padrón de deudores de EVO llega sin socios identificados ni importes, así que no hay datos de deuda. Si preguntan por deuda, decí que ese dato todavía no está disponible (no digas que nadie debe).
 - Si no sabés el nombre exacto de una sede, plan o medio de pago, consultá primero resumen_socios.
 - Si la pregunta es ambigua (ej. qué período), elegí la lectura más razonable y aclarala en una línea.
@@ -86,7 +87,8 @@ export async function answer(user: SessionUser, history: HistoryItem[], question
   const usage: Usage = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, steps: 0 };
 
   // Instrucciones + diccionario de datos: iguales en cada paso, van en caché.
-  const dictionary = await fetchDictionary();
+  const admin = user.role === "admin";
+  const dictionary = await fetchDictionary(admin);
   const systemText = systemPrompt(user) + (dictionary
     ? `\n\nDATOS PARA consulta_sql (ya los tenés, no hace falta pedir diccionario_datos):\n${dictionary}`
     : "");
@@ -112,7 +114,7 @@ export async function answer(user: SessionUser, history: HistoryItem[], question
     }
     const results = [];
     for (const use of uses) {
-      const outcome = await runTool(use.name, use.input);
+      const outcome = await runTool(use.name, use.input, admin);
       tools.push({ name: use.name, input: use.input, ...(outcome.isError ? { error: true } : {}) });
       results.push({ type: "tool_result", tool_use_id: use.id, content: outcome.content, is_error: outcome.isError });
     }

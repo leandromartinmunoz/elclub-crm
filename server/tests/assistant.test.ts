@@ -160,7 +160,26 @@ describe("consulta libre", () => {
     const admin = await Client.login("leandro", "clave-segura-123");
     const res = await admin.call("POST", "/api/assistant/ask", { question: "¿Cuántos socios tienen menos de 8 años?" });
     expect(res.body.message.text).toContain('"filas":[[12]]');
-    expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8" }), auth: "Bearer token-app" });
+    expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8", alcance: "admin" }), auth: "Bearer token-app" });
+  });
+
+  it("solo los administradores acceden a los datos del personal (Claude no lo puede forzar)", async () => {
+    const bodies: any[] = [], dics: string[] = [];
+    toolDeps.mainAppRequest = async (url, init) => {
+      if (url.includes("diccionario")) { dics.push(url); return json({ diccionario: url.includes("alcance=admin") ? "- asistencia_personal(...)" : "- socios(...)" }); }
+      bodies.push(JSON.parse(String(init.body))); return json({ columnas: ["n"], filas: [[1]], recortado: false });
+    };
+    const admin = await Client.login("leandro", "clave-segura-123");
+    await admin.call("POST", "/api/users", { username: "coordi", name: "Coordi", role: "vendedor", password: "clave-coordi-123" });
+    const seller = await Client.login("coordi", "clave-coordi-123");
+    fakeClaude("consulta_sql", { sql: "SELECT count(*) n FROM asistencia_personal", alcance: "admin" });
+    await seller.call("POST", "/api/assistant/ask", { question: "¿Quién llegó tarde?" });
+    expect(bodies.at(-1)).toEqual({ sql: "SELECT count(*) n FROM asistencia_personal" });
+    expect(claudeCalls.at(-1).system[0].text).not.toContain("asistencia_personal(");
+    await admin.call("POST", "/api/assistant/ask", { question: "¿Quién llegó tarde?" });
+    expect(bodies.at(-1)).toEqual({ sql: "SELECT count(*) n FROM asistencia_personal", alcance: "admin" });
+    expect(claudeCalls.at(-1).system[0].text).toContain("asistencia_personal(");
+    expect(dics).toHaveLength(2); // uno por alcance
   });
 });
 

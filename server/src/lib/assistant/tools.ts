@@ -104,24 +104,31 @@ export const TOOLS: Tool[] = [
   },
 ];
 
-/** Diccionario de vistas de la consulta libre, pedido a la app y guardado 1 hora. null = no disponible. */
-let dictionaryCache: { text: string; at: number } | null = null;
-export async function fetchDictionary(): Promise<string | null> {
-  if (dictionaryCache && Date.now() - dictionaryCache.at < 3_600_000) return dictionaryCache.text;
+/**
+ * Diccionario de vistas de la consulta libre, pedido a la app y guardado 1 hora. null = no disponible.
+ * admin = true incluye las vistas del personal (asistencia, llegadas tarde, turnos): solo para administradores.
+ */
+let dictionaryCache: Record<string, { text: string; at: number }> = {};
+export async function fetchDictionary(admin = false): Promise<string | null> {
+  const key = admin ? "admin" : "general";
+  const cached = dictionaryCache[key];
+  if (cached && Date.now() - cached.at < 3_600_000) return cached.text;
   const base = process.env.MAIN_APP_URL, token = process.env.MAIN_APP_TOKEN;
   if (!base || !token) return null;
   try {
-    const response = await deps.mainAppRequest(new URL("/api/ia/diccionario", base).toString(), {
+    const url = new URL("/api/ia/diccionario", base);
+    if (admin) url.searchParams.set("alcance", "admin");
+    const response = await deps.mainAppRequest(url.toString(), {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) return null;
     const text = (await response.json() as { diccionario?: unknown }).diccionario;
     if (typeof text !== "string" || !text) return null;
-    dictionaryCache = { text, at: Date.now() };
+    dictionaryCache[key] = { text, at: Date.now() };
     return text;
   } catch { return null; }
 }
-export const clearDictionaryCache = () => { dictionaryCache = null; };
+export const clearDictionaryCache = () => { dictionaryCache = {}; };
 
 /** Lo que se le manda a Claude (sin la ruta interna). */
 export const toolDefinitions = TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
@@ -130,7 +137,8 @@ const MAX_RESULT = 15_000; // caracteres por resultado: alcanza para tablas de ~
 
 export type ToolOutcome = { content: string; isError: boolean };
 
-export async function runTool(name: string, input: unknown): Promise<ToolOutcome> {
+/** admin = true solo si quien pregunta es administrador: habilita los datos del personal en consulta_sql. */
+export async function runTool(name: string, input: unknown, admin = false): Promise<ToolOutcome> {
   const tool = TOOLS.find(t => t.name === name);
   if (!tool) return { content: `No existe la consulta "${name}".`, isError: true };
   const base = process.env.MAIN_APP_URL, token = process.env.MAIN_APP_TOKEN;
@@ -143,6 +151,8 @@ export async function runTool(name: string, input: unknown): Promise<ToolOutcome
     if (["string", "number", "boolean"].includes(typeof value)) params[key] = value;
   }
   const post = tool.method === "POST";
+  if (admin && tool.name === "consulta_sql") params.alcance = "admin"; // lo decide el CRM según el rol, nunca Claude
+  if (admin && tool.name === "diccionario_datos") url.searchParams.set("alcance", "admin");
   if (!post) for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
   try {
     const response = await deps.mainAppRequest(url.toString(), {
