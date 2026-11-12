@@ -16,13 +16,13 @@ export const TOOLS: Tool[] = [
   {
     name: "resumen_socios",
     path: "/api/ia/resumen",
-    description: "Totales de socios ACTIVOS: por sede, por medio de pago de su último cobro, por plan vigente y cuántos tienen deuda. Usala primero para cantidades generales y para conocer los nombres exactos de sedes, planes y medios de pago.",
+    description: "Totales de socios ACTIVOS: por sede, por medio de pago de su último cobro, por plan vigente, por rango de edad (y edad promedio) y por género. Usala primero para cantidades generales y para conocer los nombres exactos de sedes, planes y medios de pago.",
     input_schema: { type: "object", properties: { sede } },
   },
   {
     name: "buscar_socios",
     path: "/api/ia/socios",
-    description: "Cuenta y lista socios con filtros combinables. Devuelve { total, mostrados, socios } (total es el real aunque la lista se corte en 'limite'). Cada socio trae teléfono, plan vigente, vencimiento, fecha de alta, última asistencia, asistencias de los últimos 30 días, medio y fecha de su último cobro, y deuda. Sirve para: medio de pago (ej. 'débito'), antigüedad (fecha de alta), inactivos (sin asistir X días), con deuda, por plan, sede o vencimiento.",
+    description: "Cuenta y lista socios con filtros combinables. Devuelve { total, mostrados, socios } (total es el real aunque la lista se corte en 'limite'). Cada socio trae teléfono, edad y fecha de nacimiento, género y ciudad (si están cargados), plan vigente, vencimiento, fecha de alta, última asistencia, asistencias de los últimos 30 días, medio y fecha de su último cobro, y deuda. Sirve para: edad y cumpleaños, medio de pago, antigüedad (fecha de alta), inactivos (sin asistir X días), con deuda, por plan, sede o vencimiento.",
     input_schema: {
       type: "object",
       properties: {
@@ -36,6 +36,12 @@ export const TOOLS: Tool[] = [
         vence_hasta: fecha("Vencimiento de la membresía hasta"),
         sin_asistir_dias: { type: "integer", minimum: 1, description: "Solo los que no vienen hace al menos estos días (o nunca registraron asistencia)." },
         con_deuda: { type: "boolean" },
+        edad_min: { type: "integer", minimum: 0, maximum: 120 },
+        edad_max: { type: "integer", minimum: 0, maximum: 120 },
+        cumple_desde: { type: "string", description: "Cumpleaños desde (MM-DD). Usar junto con cumple_hasta; puede cruzar fin de año." },
+        cumple_hasta: { type: "string", description: "Cumpleaños hasta (MM-DD)." },
+        genero: { type: "string", description: "Como lo informa EVO (ver por_genero en resumen_socios)." },
+        ciudad: { type: "string", description: "Ciudad o barrio (texto contenido), si EVO lo tiene cargado." },
         limite: { type: "integer", minimum: 1, maximum: 500, description: "Cuántos listar (por defecto 50). Para solo contar, usar 1." },
       },
     },
