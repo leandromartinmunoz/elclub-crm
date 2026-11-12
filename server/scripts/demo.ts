@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 import { migrate, setDb, type Db } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { hashPassword } from "../src/lib/auth.js";
+import { claudeDeps } from "../src/lib/assistant/claude.js";
+import { deps as toolDeps } from "../src/lib/assistant/tools.js";
 
 const pg = new PGlite();
 const run = (q: any) => async (sql: string, params?: unknown[]) =>
@@ -52,6 +54,22 @@ await db.query(`INSERT INTO whatsapp_reads SELECT id,'demo',(SELECT max(id) FROM
   FROM whatsapp_conversations c WHERE contact_name='Sofía Herrera'`);
 await db.query(`INSERT INTO conversation_notes(conversation_id,user_id,author_name,text)
   SELECT id,2,'Carolina Paz','Interesada en plan pileta + musculación. Viene el jueves a conocer.' FROM whatsapp_conversations WHERE contact_name='Martina Gómez'`);
+
+// Asistente de prueba: sin clave real, simula a Claude y a la app de El Club con datos inventados.
+if (!process.env.ANTHROPIC_API_KEY) {
+  process.env.ANTHROPIC_API_KEY = "demo";
+  process.env.MAIN_APP_URL = "https://app.demo";
+  process.env.MAIN_APP_TOKEN = "demo";
+  const reply = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+  toolDeps.mainAppRequest = async () => reply({ total: 3, socios: [] });
+  claudeDeps.request = async (body: any) => {
+    const last = body.messages.at(-1);
+    if (typeof last.content === "string")
+      return reply({ stop_reason: "tool_use", content: [{ type: "tool_use", id: "t1", name: "buscar_socios", input: { medio_pago: "debito_automatico" } }] });
+    return reply({ stop_reason: "end_turn", content: [{ type: "text", text:
+      "Hay **128 socios activos** pagando por débito automático (datos de prueba).\n\n| Sede | Socios | % del total |\n|---|---|---|\n| Sarmiento | 81 | 38% |\n| Ecuador (pileta) | 47 | 29% |\n\nLa mayoría está en **Musculación libre** y **Pileta 2x semana**." }] });
+  };
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 createApp({ webDist: join(here, "..", "..", "web", "dist") }).listen(3000, () => console.log("Demo en http://localhost:3000"));

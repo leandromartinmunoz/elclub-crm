@@ -4,8 +4,9 @@ import { Login } from "./Login";
 import { Inbox } from "./Inbox";
 import { Users } from "./Users";
 import { Settings } from "./Settings";
+import { Assistant } from "./Assistant";
 
-type View = "bandeja" | "equipo" | "ajustes";
+type View = "bandeja" | "asistente" | "equipo" | "ajustes";
 
 export function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -21,10 +22,11 @@ export function App() {
   if (user === undefined) return <div className="boot" aria-busy="true" />;
   if (!user) return <Login onLogin={setUser} />;
 
-  const views: { id: View; label: string; admin?: boolean }[] = [
+  const views: { id: View; label: string; roles?: User["role"][] }[] = [
     { id: "bandeja", label: "Bandeja" },
-    { id: "equipo", label: "Equipo", admin: true },
-    { id: "ajustes", label: "Conexiones", admin: true },
+    { id: "asistente", label: "Asistente", roles: ["admin", "vendedor"] },
+    { id: "equipo", label: "Equipo", roles: ["admin"] },
+    { id: "ajustes", label: "Conexiones", roles: ["admin"] },
   ];
 
   return (
@@ -32,7 +34,7 @@ export function App() {
       <header className="topbar">
         <div className="brand"><span className="brand-mark">EC</span><span>CRM El Club</span></div>
         <nav aria-label="Secciones">
-          {views.filter(v => !v.admin || user.role === "admin").map(v => (
+          {views.filter(v => !v.roles || v.roles.includes(user.role)).map(v => (
             <button key={v.id} className={view === v.id ? "nav-item active" : "nav-item"}
               aria-current={view === v.id ? "page" : undefined} onClick={() => setView(v.id)}>{v.label}</button>
           ))}
@@ -44,6 +46,7 @@ export function App() {
       </header>
       <main className="content">
         {view === "bandeja" && <Inbox me={user} />}
+        {view === "asistente" && user.role !== "recepcion" && <Assistant me={user} />}
         {view === "equipo" && user.role === "admin" && <Users me={user} />}
         {view === "ajustes" && user.role === "admin" && <Settings />}
       </main>

@@ -6,6 +6,7 @@ import { UserFacingError } from "./lib/errors.js";
 import authRoutes from "./routes/auth.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import crmRoutes from "./routes/crm.js";
+import assistantRoutes from "./routes/assistant.js";
 
 const WEBHOOKS = ["/api/whatsapp/webhook", "/api/instagram/webhook"];
 
@@ -41,6 +42,7 @@ export function createApp(options: { webDist?: string } = {}) {
   });
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   app.use("/api", loadUser);
+  app.use("/api/assistant", assistantRoutes);
   app.use("/api", authRoutes);
   app.use("/api", whatsappRoutes);
   app.use("/api", crmRoutes);
