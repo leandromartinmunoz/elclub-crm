@@ -163,7 +163,7 @@ describe("consulta libre", () => {
     expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8", alcance: "admin" }), auth: "Bearer token-app" });
   });
 
-  it("solo administradores y "Solo asistente" acceden a los datos del personal (Claude no lo puede forzar)", async () => {
+  it("solo administradores y Solo asistente acceden a los datos del personal (Claude no lo puede forzar)", async () => {
     const bodies: any[] = [], dics: string[] = [];
     toolDeps.mainAppRequest = async (url, init) => {
       if (url.includes("diccionario")) { dics.push(url); return json({ diccionario: url.includes("alcance=admin") ? "- asistencia_personal(...)" : "- socios(...)" }); }
