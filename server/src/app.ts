@@ -7,6 +7,8 @@ import authRoutes from "./routes/auth.js";
 import whatsappRoutes from "./routes/whatsapp.js";
 import crmRoutes from "./routes/crm.js";
 
+const WEBHOOKS = ["/api/whatsapp/webhook", "/api/instagram/webhook"];
+
 export function createApp(options: { webDist?: string } = {}) {
   const app = express();
   app.disable("x-powered-by");
@@ -25,13 +27,13 @@ export function createApp(options: { webDist?: string } = {}) {
   app.use(express.json({
     limit: "2mb",
     verify: (req, _res, buffer) => {
-      if ((req as Request).originalUrl.split("?")[0] === "/api/whatsapp/webhook") (req as Request).rawBody = Buffer.from(buffer);
+      if (WEBHOOKS.includes((req as Request).originalUrl.split("?")[0])) (req as Request).rawBody = Buffer.from(buffer);
     },
   }));
 
   // Defensa CSRF: los cambios solo se aceptan desde el mismo origen (además de la cookie SameSite=Strict).
   app.use("/api", (req, _res, next) => {
-    if (["GET", "HEAD", "OPTIONS"].includes(req.method) || req.path === "/whatsapp/webhook") return next();
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method) || WEBHOOKS.includes(`/api${req.path}`)) return next();
     const origin = req.get("origin");
     if (origin && origin !== `${req.protocol}://${req.get("host")}` && origin !== process.env.PUBLIC_URL?.replace(/\/$/, ""))
       throw new UserFacingError("Origen no autorizado.", 403);

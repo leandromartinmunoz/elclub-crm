@@ -174,3 +174,67 @@ describe("responder y funciones de CRM", () => {
     expect((await admin.call("GET", `/api/conversations/${id}/member`)).body).toEqual({ configured: false });
   });
 });
+
+describe("Instagram", () => {
+  const IG = "17841400000000001", PAGE = "100000000000001", CONTACT = "6100000000000001";
+  const igPayload = (messaging: unknown[]) => ({ object: "instagram", entry: [{ id: IG, time: Date.now(), messaging }] });
+  async function postIg(payload: unknown) {
+    const raw = JSON.stringify(payload);
+    const signature = `sha256=${createHmac("sha256", SECRET).update(raw).digest("hex")}`;
+    return new Client().call("POST", "/api/instagram/webhook", raw, { "x-hub-signature-256": signature });
+  }
+
+  it("vincula la cuenta, recibe mensajes, trae el nombre y responde por la página", async () => {
+    process.env.INSTAGRAM_ACCESS_TOKEN = "token-ig-falso";
+    const calls: any[] = [];
+    deps.instagramRequest = async (path, init) => {
+      calls.push({ path, body: init?.body ? JSON.parse(init.body) : undefined });
+      if (path.startsWith(`/${PAGE}?`)) return new Response(JSON.stringify({ id: PAGE, name: "El Club", instagram_business_account: { id: IG, username: "gimnasioelclub" } }));
+      if (path.startsWith(`/${PAGE}/subscribed_apps`)) return new Response(JSON.stringify({ success: true }));
+      return new Response(JSON.stringify({ recipient_id: CONTACT, message_id: "aWdfZAm.out1" }));
+    };
+    deps.instagramProfile = async () => "Pedro Pérez (@pedrop)";
+    // La verificación usa el proveedor real; se sustituye fetch para esta prueba.
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: any, init: any) => {
+      const u = String(url);
+      if (u.startsWith("https://graph.facebook.com/")) return deps.instagramRequest(u.replace(/^https:\/\/graph\.facebook\.com\/v[\d.]+/, ""), init);
+      return realFetch(url, init);
+    }) as typeof fetch;
+    try {
+      const linked = await admin.call("POST", "/api/instagram/accounts", { pageId: PAGE });
+      expect(linked.body).toMatchObject({ id: IG, channel: "instagram", displayPhone: "@gimnasioelclub" });
+    } finally { globalThis.fetch = realFetch; }
+
+    const msg = { sender: { id: CONTACT }, recipient: { id: IG }, timestamp: Date.now(), message: { mid: "aWdfZAm.in1", text: "Hola! precio de natación?" } };
+    expect((await postIg(igPayload([msg]))).status).toBe(200);
+    await postIg(igPayload([msg])); // duplicado
+    const list = await admin.call("GET", "/api/whatsapp/conversations?channel=instagram");
+    expect(list.body.items).toHaveLength(1);
+    expect(list.body.items[0]).toMatchObject({ channel: "instagram", contactName: "Pedro Pérez (@pedrop)", unreadCount: 1 });
+    expect((await admin.call("GET", "/api/whatsapp/conversations?channel=whatsapp")).body.items.every((c: any) => c.channel === "whatsapp")).toBe(true);
+
+    const id = list.body.items[0].id;
+    const sent = await admin.call("POST", `/api/whatsapp/conversations/${id}/messages`,
+      { text: "Hola Pedro, te paso los horarios", clientRequestId: "1b4e28ba-2fa1-41d2-883f-0016d3cca427" });
+    expect(sent.body).toMatchObject({ status: "sent", direction: "outbound" });
+    expect(calls.at(-1)).toMatchObject({ path: `/${PAGE}/messages`, body: { recipient: { id: CONTACT }, message: { text: "Hola Pedro, te paso los horarios" } } });
+
+    // Eco del mensaje enviado por el CRM: no se duplica. Eco de un mensaje enviado desde la app de Instagram: se agrega.
+    await postIg(igPayload([
+      { sender: { id: IG }, recipient: { id: CONTACT }, timestamp: Date.now(), message: { mid: "aWdfZAm.out1", text: "Hola Pedro, te paso los horarios", is_echo: true } },
+      { sender: { id: IG }, recipient: { id: CONTACT }, timestamp: Date.now(), message: { mid: "aWdfZAm.app1", text: "Te espero!", is_echo: true } },
+    ]));
+    const messages = (await admin.call("GET", `/api/whatsapp/conversations/${id}/messages`)).body.items;
+    expect(messages.map((m: any) => [m.direction, m.text])).toEqual([
+      ["inbound", "Hola! precio de natación?"], ["outbound", "Hola Pedro, te paso los horarios"], ["outbound", "Te espero!"],
+    ]);
+    expect(messages[2].senderName).toBe("Desde Instagram");
+    expect((await admin.call("GET", `/api/conversations/${id}/member`)).body).toMatchObject({ configured: true, error: expect.any(String) });
+  });
+
+  it("rechaza firmas inválidas en el webhook de Instagram", async () => {
+    const res = await new Client().call("POST", "/api/instagram/webhook", JSON.stringify({ object: "instagram", entry: [] }), { "x-hub-signature-256": "sha256=" + "0".repeat(64) });
+    expect(res.status).toBe(401);
+  });
+});

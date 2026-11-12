@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Conversation, type MemberLookup, type Message, type Note, type Tag, type User } from "./api";
+import { api, type Channel, type Conversation, type MemberLookup, type Message, type Note, type Tag, type User } from "./api";
 
 const POLL_MS = 5000;
 type Scope = "todos" | "me" | "none";
@@ -9,6 +9,10 @@ function time(iso: string) {
   const sameDay = d.toDateString() === now.toDateString();
   return sameDay ? d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })
     : d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+}
+function contactLine(c: Conversation) { return c.channel === "instagram" ? "Instagram" : phone(c.contactPhone); }
+function ChannelMark({ channel }: { channel: Channel }) {
+  return <span className={`channel ${channel}`} title={channel === "instagram" ? "Instagram" : "WhatsApp"}>{channel === "instagram" ? "IG" : "WA"}</span>;
 }
 function phone(p: string) { return p.startsWith("549") ? `+54 9 ${p.slice(3, 7)} ${p.slice(7)}` : `+${p}`; }
 const statusLabel: Record<string, string> = {
@@ -20,6 +24,7 @@ export function Inbox({ me }: { me: User }) {
   const [unread, setUnread] = useState(false);
   const [status, setStatus] = useState<"abierto" | "cerrado">("abierto");
   const [tag, setTag] = useState<number | "">("");
+  const [channel, setChannel] = useState<Channel | "">("");
   const [search, setSearch] = useState("");
   const [list, setList] = useState<Conversation[]>([]);
   const [unreadTotal, setUnreadTotal] = useState(0);
@@ -38,12 +43,13 @@ export function Inbox({ me }: { me: User }) {
     if (scope !== "todos") q.set("assigned", scope);
     if (unread) q.set("unread", "true");
     if (tag) q.set("tag", String(tag));
+    if (channel) q.set("channel", channel);
     if (search.trim()) q.set("search", search.trim());
     try {
       const data = await api<{ items: Conversation[]; unreadTotal: number }>(`/whatsapp/conversations?${q}`);
       setList(data.items); setUnreadTotal(data.unreadTotal); setListError("");
     } catch (e) { setListError((e as Error).message); }
-  }, [scope, unread, status, tag, search]);
+  }, [scope, unread, status, tag, channel, search]);
 
   useEffect(() => {
     const t = setTimeout(loadList, search ? 300 : 0);
@@ -65,11 +71,16 @@ export function Inbox({ me }: { me: User }) {
               <button key={id} aria-pressed={scope === id} onClick={() => setScope(id)}>{label}</button>
             ))}
           </div>
+          <label className="check"><input type="checkbox" checked={unread} onChange={e => setUnread(e.target.checked)} />No leídos{unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}</label>
           <div className="filter-row">
-            <label className="check"><input type="checkbox" checked={unread} onChange={e => setUnread(e.target.checked)} />No leídos{unreadTotal > 0 && <span className="badge">{unreadTotal}</span>}</label>
             <select aria-label="Etiqueta" value={tag} onChange={e => setTag(e.target.value ? Number(e.target.value) : "")}>
               <option value="">Etiqueta</option>
               {tags.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <select aria-label="Canal" value={channel} onChange={e => setChannel(e.target.value as Channel | "")}>
+              <option value="">Canal</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="instagram">Instagram</option>
             </select>
             <select aria-label="Estado" value={status} onChange={e => setStatus(e.target.value as "abierto" | "cerrado")}>
               <option value="abierto">Abiertos</option>
@@ -83,7 +94,7 @@ export function Inbox({ me }: { me: User }) {
             <li key={c.id}>
               <button className={c.id === selected ? "conv active" : "conv"} onClick={() => setSelected(c.id)}>
                 <span className="conv-top">
-                  <span className="conv-name">{c.contactName}</span>
+                  <span className="conv-name"><ChannelMark channel={c.channel} />{c.contactName}</span>
                   <time>{time(c.lastMessageAt)}</time>
                 </span>
                 <span className="conv-bottom">
@@ -101,8 +112,8 @@ export function Inbox({ me }: { me: User }) {
           ))}
         </ul>
         {!list.length && !listError && (
-          <p className="empty">{search || unread || tag || scope !== "todos" ? "Ningún chat coincide con estos filtros." :
-            status === "cerrado" ? "No hay chats cerrados." : "Cuando un cliente escriba al WhatsApp de El Club, el chat aparece acá."}</p>
+          <p className="empty">{search || unread || tag || channel || scope !== "todos" ? "Ningún chat coincide con estos filtros." :
+            status === "cerrado" ? "No hay chats cerrados." : "Cuando un cliente escriba al WhatsApp o al Instagram de El Club, el chat aparece acá."}</p>
         )}
       </aside>
 
@@ -138,6 +149,7 @@ function Chat({ me, conversation, tags, users, onBack, onChanged }: {
   const id = conversation.id;
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState("");
+  const maxLength = conversation.channel === "instagram" ? 1000 : 4096;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [showInfo, setShowInfo] = useState(false);
@@ -183,7 +195,7 @@ function Chat({ me, conversation, tags, users, onBack, onChanged }: {
           <button className="back" onClick={onBack} aria-label="Volver a la lista">‹</button>
           <div className="chat-title">
             <h2>{conversation.contactName}</h2>
-            <span className="muted">{phone(conversation.contactPhone)}</span>
+            <span className="muted"><ChannelMark channel={conversation.channel} />{contactLine(conversation)}</span>
           </div>
           <button className="ghost" onClick={() => setShowInfo(s => !s)} aria-expanded={showInfo}>Ficha</button>
         </header>
@@ -203,7 +215,7 @@ function Chat({ me, conversation, tags, users, onBack, onChanged }: {
           <div ref={bottom} />
         </div>
         <form className="composer" onSubmit={send}>
-          <textarea rows={2} value={text} disabled={!canReply}
+          <textarea rows={2} value={text} disabled={!canReply} maxLength={maxLength}
             placeholder={canReply ? "Escribí una respuesta. Enter envía, Shift+Enter hace un salto de línea." : "No se puede responder ahora."}
             onChange={e => { setText(e.target.value); pendingId.current = null; }}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} aria-label="Respuesta" />

@@ -10,7 +10,8 @@ const router = Router();
 router.use(requireUser);
 
 async function conversationExists(id: number) {
-  const { rows } = await db().query("SELECT id,contact_phone FROM whatsapp_conversations WHERE id=$1", [id]);
+  const { rows } = await db().query(`SELECT c.id,c.contact_phone,a.channel FROM whatsapp_conversations c
+    JOIN whatsapp_accounts a ON a.id=c.account_id WHERE c.id=$1`, [id]);
   if (!rows[0]) throw new UserFacingError("La conversación no existe.", 404);
   return rows[0];
 }
@@ -103,6 +104,8 @@ router.delete("/notes/:id", async (req, res) => {
 // Ficha del socio
 router.get("/conversations/:id/member", async (req, res) => {
   const conversation = await conversationExists(positiveId(req.params.id));
+  // En Instagram no hay teléfono: no se puede buscar al socio automáticamente.
+  if (conversation.channel === "instagram") { res.json({ configured: true, error: "En Instagram no hay teléfono para buscar al socio." }); return; }
   res.json(await lookupMember(conversation.contact_phone));
 });
 

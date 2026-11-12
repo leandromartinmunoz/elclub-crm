@@ -24,7 +24,7 @@ export function App() {
   const views: { id: View; label: string; admin?: boolean }[] = [
     { id: "bandeja", label: "Bandeja" },
     { id: "equipo", label: "Equipo", admin: true },
-    { id: "ajustes", label: "WhatsApp", admin: true },
+    { id: "ajustes", label: "Conexiones", admin: true },
   ];
 
   return (

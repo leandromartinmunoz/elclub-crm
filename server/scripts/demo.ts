@@ -23,7 +23,12 @@ await db.query(`INSERT INTO users(username,name,role,password_hash) VALUES
 await db.query(`INSERT INTO whatsapp_accounts(id,label,display_phone,verified_name,created_by,last_event_at)
   VALUES('1072906325127271','El Club','+54 9 3547 32-5050','El Club','demo',now())`);
 
-const chats: [string, string, string[][], number | null, string[]][] = [
+await db.query(`INSERT INTO whatsapp_accounts(id,channel,page_id,label,display_phone,verified_name,created_by,last_event_at)
+  VALUES('17841400000000001','instagram','100000000000001','Instagram @gimnasioelclub','@gimnasioelclub','El Club','demo',now())`);
+
+const chats: [string, string, string[][], number | null, string[], string?][] = [
+  ["6100000000000001", "Valentina Ríos (@valen.rios)", [["in", "Hola! Vi el reel de la pileta, ¿tienen clases para chicos?", "8"]], null, ["Prospecto"], "17841400000000001"],
+  ["6100000000000002", "@nico.entrena", [["in", "Precio del pase libre?", "95"], ["out", "Hola Nico! Te paso todo por acá 💪", "90"]], 2, ["Consulta"], "17841400000000001"],
   ["5493547401122", "Martina Gómez", [["in", "Hola! Quería saber horarios de pileta libre para adultos", "190"], ["out", "Hola Martina! En Ecuador la pileta libre es de 7 a 9 y de 19 a 22 h.", "185"], ["in", "Y el valor mensual?", "12"]], 2, ["Prospecto"]],
   ["5493547559900", "Diego Ferreyra", [["in", "Buenas, se me venció la cuota y no puedo pasar el molinete", "45"]], null, ["No renovó"]],
   ["5493516223344", "Lucía Bustos", [["in", "Me pasan el cbu para transferir?", "300"], ["out", "Sí Lucía, te lo paso por acá. ¿Abonás el plan musculación 3 veces?", "290"], ["in", "Sí, ese", "280"]], 1, ["Socio", "Deudor"]],
@@ -31,12 +36,12 @@ const chats: [string, string, string[][], number | null, string[]][] = [
   ["5493547998877", "Sofía Herrera", [["in", "Gracias por todo!! nos vemos mañana", "2000"]], 1, ["Socio"]],
 ];
 let n = 0;
-for (const [phone, name, msgs, assigned, tagNames] of chats) {
+for (const [phone, name, msgs, assigned, tagNames, account = "1072906325127271"] of chats) {
   const last = msgs.at(-1)!;
   const lastIn = [...msgs].reverse().find(m => m[0] === "in")!;
   const { rows: [c] } = await db.query(`INSERT INTO whatsapp_conversations(account_id,contact_phone,contact_name,preview,last_message_at,last_inbound_at,assigned_to)
-    VALUES('1072906325127271',$1,$2,$3,now()-($4||' minutes')::interval,now()-($5||' minutes')::interval,$6) RETURNING id`,
-    [phone, name, last[1], last[2], lastIn[2], assigned]);
+    VALUES($7,$1,$2,$3,now()-($4||' minutes')::interval,now()-($5||' minutes')::interval,$6) RETURNING id`,
+    [phone, name, last[1], last[2], lastIn[2], assigned, account]);
   for (const [dir, text, ago] of msgs)
     await db.query(`INSERT INTO whatsapp_messages(conversation_id,direction,text,status,provider_id,occurred_at,sender_name)
       VALUES($1,$2,$3,$4,$5,now()-($6||' minutes')::interval,$7)`,

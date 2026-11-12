@@ -1,6 +1,6 @@
 # CRM El Club
 
-Bandeja de WhatsApp y seguimiento comercial de El Club. Es una app propia, independiente de Replit, que corre en el VPS de Hostinger.
+Bandeja de WhatsApp e Instagram y seguimiento comercial de El Club. Es una app propia, independiente de Replit, que corre en el VPS de Hostinger.
 
 ## Qué hace (v1)
 
@@ -8,6 +8,9 @@ Bandeja de WhatsApp y seguimiento comercial de El Club. Es una app propia, indep
 - **Bandeja de WhatsApp**: recibe los mensajes del número de El Club y permite responder desde la computadora o el celular.
   - Meta solo deja responder durante las 24 h siguientes al último mensaje del cliente. La barra de arriba del chat muestra cuánto tiempo queda.
   - Nunca envía duplicados: si un envío queda en duda, se marca "Sin confirmar" y no se reintenta solo.
+- **Instagram (mensajes directos)** en la misma bandeja, marcado con **IG** (WhatsApp con **WA**) y con filtro por canal.
+  - Muestra los mensajes nuevos desde que se vincula la cuenta, también los que se respondan desde la app de Instagram ("Desde Instagram").
+  - Misma regla de 24 h. Mensajes de hasta 1000 caracteres. La ficha de socio no aplica (Instagram no da teléfono).
 - **Seguimiento**: asignar cada chat a un responsable, etiquetas (Prospecto, Socio, Deudor, No renovó, Consulta), cerrar o reabrir chats y notas internas que solo ve el equipo.
 - **Ficha del socio**: si se conecta con la app de El Club, muestra plan, sede, vencimiento y deuda del número que escribe.
 
@@ -50,7 +53,7 @@ El servidor ya tiene Docker y Caddy (`/opt/apps/caddy`), que reparte los subdomi
    }
    ```
    y `docker compose -f /opt/apps/caddy/compose.yml restart caddy`.
-4. Entrar con el usuario admin del `.env`, ir a **WhatsApp** y vincular el número con su ID de Meta (Phone number ID).
+4. Entrar con el usuario admin del `.env`, ir a **Conexiones** y vincular el número con su ID de Meta (Phone number ID).
 
 ### Pasar WhatsApp de Replit al CRM (una sola vez)
 
@@ -61,6 +64,16 @@ Meta manda los mensajes entrantes a **una sola dirección**. Cuando el CRM esté
 3. Suscribir el campo `messages`.
 
 Para volver atrás, se pone de nuevo la dirección anterior.
+
+### Conectar Instagram
+
+No necesita la revisión de Meta: la app solo maneja la cuenta propia de El Club (acceso estándar).
+
+1. La cuenta de Instagram tiene que ser **profesional** y estar vinculada a la **página de Facebook** de El Club.
+2. Meta Business → Configuración del negocio → Usuarios del sistema → **ElClub API**: asignarle la página de Facebook (control total) y generar un token con los permisos `pages_show_list`, `pages_manage_metadata`, `pages_messaging`, `instagram_basic`, `instagram_manage_messages`, `business_management`. Con ese token, `GET /me/accounts` devuelve el **token de la página**: va en `INSTAGRAM_ACCESS_TOKEN` del `.env` (no vence).
+3. Meta for Developers → app "EL Club - Comunicacion" → agregar el producto **Instagram** (si no está) → Webhooks → objeto **Instagram**: URL `https://crm.gimnasioelclub.com.ar/api/instagram/webhook`, mismo token de verificación, suscribir `messages`. Esto **no** toca el webhook de WhatsApp.
+4. En la app de Instagram: Configuración → Mensajes → **Permitir acceso a los mensajes** (herramientas conectadas).
+5. En el CRM → **Conexiones** → Instagram: pegar el ID de la página de Facebook y tocar "Vincular Instagram".
 
 ## Actualizar
 
