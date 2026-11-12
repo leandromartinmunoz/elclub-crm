@@ -23,7 +23,7 @@ export const assistantConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 const model = () => process.env.ANTHROPIC_MODEL || "claude-sonnet-5-5";
 const MAX_STEPS = 12;
 
-const roleLabel: Record<SessionUser["role"], string> = { admin: "administración", vendedor: "ventas", recepcion: "recepción" };
+const roleLabel: Record<SessionUser["role"], string> = { admin: "administración", vendedor: "ventas", recepcion: "recepción", asistente: "consultas generales" };
 
 function systemPrompt(user: SessionUser, now = new Date()) {
   const today = new Intl.DateTimeFormat("es-AR", {

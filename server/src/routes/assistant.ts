@@ -6,9 +6,9 @@ import { requireRole } from "../lib/auth.js";
 import { answer, assistantConfigured } from "../lib/assistant/claude.js";
 import { positiveId } from "./whatsapp.js";
 
-// Se monta en /api/assistant. Por ahora lo usan Administración y Ventas.
+// Se monta en /api/assistant. Lo usan Administración, Ventas y el rol "Solo asistente".
 const router = Router();
-router.use(requireRole("admin", "vendedor"));
+router.use(requireRole("admin", "vendedor", "asistente"));
 
 const HOURLY_LIMIT = 60;    // preguntas por persona por hora (control de costos)
 const HISTORY_LIMIT = 20;   // mensajes anteriores que se le pasan a Claude

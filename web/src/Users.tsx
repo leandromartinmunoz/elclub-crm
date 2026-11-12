@@ -27,7 +27,7 @@ export function Users({ me }: { me: User }) {
         <label>Usuario<input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} required
           pattern="[a-zA-Z0-9._\-]{3,40}" title="De 3 a 40 letras, números, punto o guion" /></label>
         <label>Rol<select value={form.role} onChange={e => setForm({ ...form, role: e.target.value as Role })}>
-          {(["vendedor", "recepcion", "admin"] as Role[]).map(r => <option key={r} value={r}>{roleName[r]}</option>)}
+          {(["vendedor", "recepcion", "asistente", "admin"] as Role[]).map(r => <option key={r} value={r}>{roleName[r]}</option>)}
         </select></label>
         <label>Contraseña inicial<input type="text" value={form.password} minLength={10} onChange={e => setForm({ ...form, password: e.target.value })} required /></label>
         <button className="primary">Crear usuario</button>
@@ -46,7 +46,7 @@ export function Users({ me }: { me: User }) {
               <td>
                 <select value={u.role} disabled={u.id === me.id} aria-label={`Rol de ${u.name}`}
                   onChange={e => act(() => api(`/users/${u.id}`, { method: "PATCH", body: { role: e.target.value } }), "Rol actualizado.")}>
-                  {(["vendedor", "recepcion", "admin"] as Role[]).map(r => <option key={r} value={r}>{roleName[r]}</option>)}
+                  {(["vendedor", "recepcion", "asistente", "admin"] as Role[]).map(r => <option key={r} value={r}>{roleName[r]}</option>)}
                 </select>
               </td>
               <td>{u.active === false ? "Desactivado" : "Activo"}</td>

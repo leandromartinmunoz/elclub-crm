@@ -1,4 +1,4 @@
-export type Role = "admin" | "vendedor" | "recepcion";
+export type Role = "admin" | "vendedor" | "recepcion" | "asistente";
 export type User = { id: number; username: string; name: string; role: Role; active?: boolean };
 export type Tag = { id: number; name: string; color: string };
 export type Channel = "whatsapp" | "instagram";
@@ -40,4 +40,4 @@ export async function api<T>(path: string, options: { method?: string; body?: un
   return data as T;
 }
 
-export const roleName: Record<Role, string> = { admin: "Administración", vendedor: "Ventas", recepcion: "Recepción" };
+export const roleName: Record<Role, string> = { admin: "Administración", vendedor: "Ventas", recepcion: "Recepción", asistente: "Solo asistente" };

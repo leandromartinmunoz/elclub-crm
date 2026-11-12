@@ -68,7 +68,7 @@ router.get("/users", requireUser, async (req, res) => {
   res.json(rows);
 });
 
-const Role = z.enum(["admin", "vendedor", "recepcion"]);
+const Role = z.enum(["admin", "vendedor", "recepcion", "asistente"]);
 const CreateUser = z.object({
   username: z.string().trim().toLowerCase().regex(/^[a-z0-9._-]{3,40}$/),
   name: z.string().trim().min(1).max(80),

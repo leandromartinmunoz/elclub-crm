@@ -158,3 +158,18 @@ describe("consulta libre", () => {
     expect(seen).toEqual({ url: "https://app.ejemplo.com/api/ia/consulta", method: "POST", body: JSON.stringify({ sql: "SELECT count(*) n FROM socios WHERE edad < 8" }), auth: "Bearer token-app" });
   });
 });
+
+describe("rol solo asistente", () => {
+  it("usa el asistente pero no ve el resto del CRM", async () => {
+    const admin = await Client.login("leandro", "clave-segura-123");
+    const created = await admin.call("POST", "/api/users", { username: "hermano", name: "Hermano", role: "asistente", password: "clave-hermano-123" });
+    expect(created.status).toBe(200);
+    const bro = await Client.login("hermano", "clave-hermano-123");
+    expect((await bro.call("GET", "/api/auth/me")).body.role).toBe("asistente");
+    expect((await bro.call("GET", "/api/assistant/chats")).status).toBe(200);
+    for (const path of ["/api/whatsapp/conversations", "/api/tags", "/api/users", "/api/whatsapp/status", "/api/assistant/log"])
+      expect((await bro.call("GET", path)).status, path).toBe(403);
+    fakeClaude("resumen_socios", {});
+    expect((await bro.call("POST", "/api/assistant/ask", { question: "Resumen" })).status).toBe(200);
+  });
+});

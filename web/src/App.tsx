@@ -11,6 +11,7 @@ type View = "bandeja" | "asistente" | "equipo" | "ajustes";
 export function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [view, setView] = useState<View>("bandeja");
+  const onlyAssistant = user?.role === "asistente";
 
   useEffect(() => {
     api<User>("/auth/me").then(setUser).catch(() => setUser(null));
@@ -23,8 +24,8 @@ export function App() {
   if (!user) return <Login onLogin={setUser} />;
 
   const views: { id: View; label: string; roles?: User["role"][] }[] = [
-    { id: "bandeja", label: "Bandeja" },
-    { id: "asistente", label: "Asistente", roles: ["admin", "vendedor"] },
+    { id: "bandeja", label: "Bandeja", roles: ["admin", "vendedor", "recepcion"] },
+    { id: "asistente", label: "Asistente", roles: ["admin", "vendedor", "asistente"] },
     { id: "equipo", label: "Equipo", roles: ["admin"] },
     { id: "ajustes", label: "Conexiones", roles: ["admin"] },
   ];
@@ -45,8 +46,8 @@ export function App() {
         </div>
       </header>
       <main className="content">
-        {view === "bandeja" && <Inbox me={user} />}
-        {view === "asistente" && user.role !== "recepcion" && <Assistant me={user} />}
+        {!onlyAssistant && view === "bandeja" && <Inbox me={user} />}
+        {(view === "asistente" || onlyAssistant) && user.role !== "recepcion" && <Assistant me={user} />}
         {view === "equipo" && user.role === "admin" && <Users me={user} />}
         {view === "ajustes" && user.role === "admin" && <Settings />}
       </main>

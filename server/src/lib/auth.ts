@@ -8,7 +8,7 @@ const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) =>
 export const COOKIE = "crm_session";
 const SESSION_DAYS = 14;
 
-export type Role = "admin" | "vendedor" | "recepcion";
+export type Role = "admin" | "vendedor" | "recepcion" | "asistente";
 export type SessionUser = { id: number; username: string; name: string; role: Role };
 declare global { namespace Express { interface Request { user?: SessionUser; rawBody?: Buffer } } }
 

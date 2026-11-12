@@ -42,6 +42,12 @@ export function createApp(options: { webDist?: string } = {}) {
   });
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   app.use("/api", loadUser);
+  // Rol "asistente": solo el Asistente y su propia sesión; el resto del CRM queda bloqueado en el servidor.
+  app.use("/api", (req, _res, next) => {
+    if (req.user?.role === "asistente" && !/^\/(assistant|auth)(\/|$)/.test(req.path))
+      throw new UserFacingError("Tu usuario solo tiene acceso al Asistente.", 403);
+    next();
+  });
   app.use("/api/assistant", assistantRoutes);
   app.use("/api", authRoutes);
   app.use("/api", whatsappRoutes);
