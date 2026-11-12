@@ -28,7 +28,7 @@ export const TOOLS: Tool[] = [
       properties: {
         sede,
         estado: { type: "string", enum: ["activo", "inactivo", "todos"], description: "Por defecto: activo (marca de EVO)." },
-        medio_pago: { type: "string", description: "Texto contenido en el medio de pago del ÚLTIMO cobro, ej. 'débito'. Ver nombres en resumen_socios." },
+        medio_pago: { type: "string", description: "Texto contenido en el medio de pago del ÚLTIMO cobro, con el nombre de EVO en inglés: 'Cash' (efectivo), 'Deposit' (depósito/transferencia), 'Debit card' (tarjeta de débito), 'Credit card' (tarjeta de crédito). Ver nombres exactos en resumen_socios." },
         plan: { type: "string", description: "Texto contenido en el plan vigente." },
         alta_desde: fecha("Fecha de alta desde"),
         alta_hasta: fecha("Fecha de alta hasta"),
