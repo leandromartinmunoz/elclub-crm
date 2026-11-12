@@ -104,10 +104,29 @@ export const TOOLS: Tool[] = [
   },
 ];
 
+/** Diccionario de vistas de la consulta libre, pedido a la app y guardado 1 hora. null = no disponible. */
+let dictionaryCache: { text: string; at: number } | null = null;
+export async function fetchDictionary(): Promise<string | null> {
+  if (dictionaryCache && Date.now() - dictionaryCache.at < 3_600_000) return dictionaryCache.text;
+  const base = process.env.MAIN_APP_URL, token = process.env.MAIN_APP_TOKEN;
+  if (!base || !token) return null;
+  try {
+    const response = await deps.mainAppRequest(new URL("/api/ia/diccionario", base).toString(), {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) return null;
+    const text = (await response.json() as { diccionario?: unknown }).diccionario;
+    if (typeof text !== "string" || !text) return null;
+    dictionaryCache = { text, at: Date.now() };
+    return text;
+  } catch { return null; }
+}
+export const clearDictionaryCache = () => { dictionaryCache = null; };
+
 /** Lo que se le manda a Claude (sin la ruta interna). */
 export const toolDefinitions = TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema }));
 
-const MAX_RESULT = 60_000; // caracteres por resultado, para no llenar el contexto
+const MAX_RESULT = 15_000; // caracteres por resultado: alcanza para tablas de ~150 filas y abarata cada paso
 
 export type ToolOutcome = { content: string; isError: boolean };
 
@@ -138,7 +157,7 @@ export async function runTool(name: string, input: unknown): Promise<ToolOutcome
     const text = await response.text();
     if (!response.ok) return { content: `La app de El Club respondió con error ${response.status}: ${text.slice(0, 600)}`, isError: true };
     return {
-      content: text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}\n[resultado recortado: pedí menos filas con "limite"]` : text,
+      content: text.length > MAX_RESULT ? `${text.slice(0, MAX_RESULT)}\n[resultado recortado: pedí menos filas (limite / LIMIT) o agrupá con COUNT/SUM]` : text,
       isError: false,
     };
   } catch {

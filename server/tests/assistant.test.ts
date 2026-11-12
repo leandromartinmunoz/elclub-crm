@@ -6,7 +6,7 @@ import { migrate, setDb, type Db } from "../src/db.js";
 import { createApp } from "../src/app.js";
 import { ensureFirstAdmin, hashPassword } from "../src/lib/auth.js";
 import { claudeDeps } from "../src/lib/assistant/claude.js";
-import { deps as toolDeps } from "../src/lib/assistant/tools.js";
+import { clearDictionaryCache, deps as toolDeps } from "../src/lib/assistant/tools.js";
 
 let server: Server, base: string, pg: PGlite;
 
@@ -58,7 +58,7 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "clave-falsa";
   process.env.MAIN_APP_URL = "https://app.ejemplo.com";
   process.env.MAIN_APP_TOKEN = "token-app";
-  claudeCalls = []; appCalls = [];
+  claudeCalls = []; appCalls = []; clearDictionaryCache();
   toolDeps.mainAppRequest = async (url, init) => {
     appCalls.push({ url, auth: (init.headers as any).Authorization });
     if (url.includes("/api/ia/socios")) return json({ total: 42, socios: [{ nombre: "Juana", medio_pago: "debito_automatico" }] });
@@ -106,9 +106,14 @@ describe("asistente", () => {
     expect(res.body.message.text).toContain('"total":42');
     expect(res.body.message.tools).toEqual([{ name: "buscar_socios", input: { medio_pago: "debito_automatico", limite: 1, inventado: "x" } }]);
     // Solo manda parámetros conocidos, con el token de la app.
-    expect(appCalls).toEqual([{ url: "https://app.ejemplo.com/api/ia/socios?medio_pago=debito_automatico&limite=1", auth: "Bearer token-app" }]);
+    expect(appCalls.filter(c => !c.url.includes("diccionario"))).toEqual([{ url: "https://app.ejemplo.com/api/ia/socios?medio_pago=debito_automatico&limite=1", auth: "Bearer token-app" }]);
     // A Claude le llega la fecha de hoy y el nombre de quien pregunta.
-    expect(claudeCalls[0].system).toContain("Carolina Paz");
+    expect(claudeCalls[0].system[0].text).toContain("Carolina Paz");
+    // Caché: instrucciones, herramientas y el último mensaje marcados.
+    expect(claudeCalls[0].system[0].cache_control).toEqual({ type: "ephemeral" });
+    expect(claudeCalls[0].tools.at(-1).cache_control).toEqual({ type: "ephemeral" });
+    expect(claudeCalls[1].messages.at(-1).content.at(-1).cache_control).toEqual({ type: "ephemeral" });
+    expect(claudeCalls[1].messages[0].content).toBe("¿Cuántos pagan por débito automático?"); // los anteriores sin marca
     expect(claudeCalls[0].tools.map((t: any) => t.name)).toContain("socios_sin_renovar");
 
     const chats = (await caro.call("GET", "/api/assistant/chats")).body;
@@ -171,5 +176,23 @@ describe("rol solo asistente", () => {
       expect((await bro.call("GET", path)).status, path).toBe(403);
     fakeClaude("resumen_socios", {});
     expect((await bro.call("POST", "/api/assistant/ask", { question: "Resumen" })).status).toBe(200);
+  });
+});
+
+
+describe("costo", () => {
+  it("incluye el diccionario en las instrucciones y no ofrece diccionario_datos", async () => {
+    toolDeps.mainAppRequest = async (url, init) => { appCalls.push({ url, auth: (init.headers as any).Authorization }); return url.includes("diccionario")
+      ? json({ diccionario: "- socios(id_evo, edad): una fila por socio" }) : json({ columnas: ["n"], filas: [[1]], recortado: false }); };
+    claudeDeps.request = async (body: any) => { claudeCalls.push(body);
+      return json({ stop_reason: "end_turn", content: [{ type: "text", text: "ok" }], usage: { input_tokens: 10, cache_read_input_tokens: 900, cache_creation_input_tokens: 0, output_tokens: 5 } }); };
+    const admin = await Client.login("leandro", "clave-segura-123");
+    await admin.call("POST", "/api/assistant/ask", { question: "Hola" });
+    await admin.call("POST", "/api/assistant/ask", { question: "Hola 2" });
+    expect(claudeCalls[0].system[0].text).toContain("socios(id_evo, edad)");
+    expect(claudeCalls[0].tools.map((t: any) => t.name)).not.toContain("diccionario_datos");
+    expect(appCalls.filter(c => c.url.includes("diccionario"))).toHaveLength(1); // guardado 1 hora
+    const log = (await admin.call("GET", "/api/assistant/log")).body;
+    expect(log[0].usage).toEqual({ input: 10, cacheWrite: 0, cacheRead: 900, output: 5, steps: 1 });
   });
 });

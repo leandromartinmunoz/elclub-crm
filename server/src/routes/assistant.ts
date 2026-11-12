@@ -76,8 +76,8 @@ router.post("/ask", async (req, res) => {
   }
   const message = await db().transaction(async tx => {
     await tx.query("INSERT INTO assistant_messages(chat_id,role,text) VALUES($1,'user',$2)", [chatId, question]);
-    const { rows } = await tx.query(`INSERT INTO assistant_messages(chat_id,role,text,tools) VALUES($1,'assistant',$2,$3)
-      RETURNING id,role,text,tools,created_at AS "createdAt"`, [chatId, result.text, JSON.stringify(result.tools)]);
+    const { rows } = await tx.query(`INSERT INTO assistant_messages(chat_id,role,text,tools,usage) VALUES($1,'assistant',$2,$3,$4)
+      RETURNING id,role,text,tools,created_at AS "createdAt"`, [chatId, result.text, JSON.stringify(result.tools), JSON.stringify(result.usage ?? null)]);
     await tx.query("UPDATE assistant_chats SET updated_at=now() WHERE id=$1", [chatId]);
     return rows[0];
   });
@@ -87,7 +87,8 @@ router.post("/ask", async (req, res) => {
 // Registro de consultas (solo Administración): quién preguntó qué.
 router.get("/log", requireRole("admin"), async (_req, res) => {
   const { rows } = await db().query(`SELECT m.id,u.name AS "userName",m.text AS question,m.created_at AS "createdAt",
-      (SELECT a.tools FROM assistant_messages a WHERE a.chat_id=m.chat_id AND a.id>m.id AND a.role='assistant' ORDER BY a.id LIMIT 1) AS tools
+      (SELECT a.tools FROM assistant_messages a WHERE a.chat_id=m.chat_id AND a.id>m.id AND a.role='assistant' ORDER BY a.id LIMIT 1) AS tools,
+      (SELECT a.usage FROM assistant_messages a WHERE a.chat_id=m.chat_id AND a.id>m.id AND a.role='assistant' ORDER BY a.id LIMIT 1) AS usage
     FROM assistant_messages m JOIN assistant_chats c ON c.id=m.chat_id JOIN users u ON u.id=c.user_id
     WHERE m.role='user' ORDER BY m.id DESC LIMIT 200`);
   res.json(rows);
